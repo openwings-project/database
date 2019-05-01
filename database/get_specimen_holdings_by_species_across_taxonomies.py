@@ -12,9 +12,12 @@ Created on Jun 13, 2018 at 09:50:25.
 """
 
 import sys
+import configparser
 from datetime import date
-import pandas as pd
+
 import numpy
+import pandas as pd
+
 from sqlalchemy import create_engine
 
 import pdb
@@ -89,7 +92,7 @@ if __name__ == '__main__':
     print("Starting.\n\n")
     print("Family,Species,Others,Ours,MissingOurs,MissingOthers")
     db_conf = configparser.ConfigParser()
-    db_conf.read("access.conf")
+    db_conf.read("/home/bcf/access.conf")
     connection_string = "postgresql://{0}:{1}@localhost:5432/openwings".format(
             db_conf['openwings']['user'],
             db_conf['openwings']['password']
