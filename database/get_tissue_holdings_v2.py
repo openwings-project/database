@@ -145,7 +145,27 @@ def get_tissue_records(connection, taxon):
     if len(taxon) == 1:
         other_tissue_df = pd.read_sql_query("""
             SELECT
-                *
+                icode,
+                year,
+                catalognumber,
+                sex,
+                ordr,
+                family,
+                genus,
+                species,
+                subspecies,
+                preparations,
+                continent,
+                country,
+                state,
+                county,
+                island,
+                locality,
+                decimallatitude,
+                decimallongitude,
+                remarks,
+                prep,
+                rank
             FROM
                 tissues
             WHERE 
@@ -160,7 +180,27 @@ def get_tissue_records(connection, taxon):
         where = " OR ".join(partial_where)
         other_tissue_df = pd.read_sql_query("""
             SELECT
-                *
+                icode,
+                year,
+                catalognumber,
+                sex,
+                ordr,
+                family,
+                genus,
+                species,
+                subspecies,
+                preparations,
+                continent,
+                country,
+                state,
+                county,
+                island,
+                locality,
+                decimallatitude,
+                decimallongitude,
+                remarks,
+                prep,
+                rank
             FROM
                 tissues 
             WHERE 
@@ -176,7 +216,27 @@ def get_vertnet_tissue_records(connection, taxon):
     if len(taxon) == 1:
         vertnet_tissue_df = pd.read_sql_query("""
             SELECT
-                *
+                icode,
+                year,
+                catalognumber,
+                sex,
+                ordr,
+                family,
+                genus,
+                species,
+                subspecies,
+                preparations,
+                continent,
+                country,
+                state,
+                county,
+                island,
+                locality,
+                decimallatitude,
+                decimallongitude,
+                remarks,
+                prep,
+                rank
             FROM
                 v_vertnet
             WHERE 
@@ -191,7 +251,27 @@ def get_vertnet_tissue_records(connection, taxon):
         where = " OR ".join(partial_where)
         vertnet_tissue_df = pd.read_sql_query("""
             SELECT
-                *
+                icode,
+                year,
+                catalognumber,
+                sex,
+                ordr,
+                family,
+                genus,
+                species,
+                subspecies,
+                preparations,
+                continent,
+                country,
+                state,
+                county,
+                island,
+                locality,
+                decimallatitude,
+                decimallongitude,
+                remarks,
+                prep,
+                rank
             FROM
                 v_vertnet 
             WHERE 
@@ -207,7 +287,27 @@ def get_ala_tissue_records(connection, taxon):
     if len(taxon) == 1:
         ala_tissue_df = pd.read_sql_query("""
             SELECT
-                *
+                icode,
+                year,
+                catalognumber,
+                sex,
+                ordr,
+                family,
+                genus,
+                species,
+                subspecies,
+                preparations,
+                continent,
+                country,
+                state,
+                county,
+                island,
+                locality,
+                decimallatitude,
+                decimallongitude,
+                remarks,
+                prep,
+                rank
             FROM
                 v_ala
             WHERE 
@@ -222,7 +322,27 @@ def get_ala_tissue_records(connection, taxon):
         where = " OR ".join(partial_where)
         ala_tissue_df = pd.read_sql_query("""
             SELECT
-                *
+                icode,
+                year,
+                catalognumber,
+                sex,
+                ordr,
+                family,
+                genus,
+                species,
+                subspecies,
+                preparations,
+                continent,
+                country,
+                state,
+                county,
+                island,
+                locality,
+                decimallatitude,
+                decimallongitude,
+                remarks,
+                prep,
+                rank
             FROM
                 v_ala 
             WHERE 
@@ -232,7 +352,6 @@ def get_ala_tissue_records(connection, taxon):
             LIMIT 25
             """.format(where), con=connection)
     return ala_tissue_df
-
 
 if __name__ == '__main__':
     print("Starting.\n")
@@ -246,10 +365,16 @@ if __name__ == '__main__':
     engine = create_engine(connection_string)
     con = engine.connect()
     # read in spreadsheet with values for genus and species
-    sheet = pd.read_excel(args.species_spreadsheet)
+    sheet = pd.read_csv(args.species_spreadsheet,header=0)
+    # let's go ahead and sort this sheet so that our 0/1 color works:
+    sheet.sort_values(['Order','Family','Genus species'], inplace=True)
+    print("Sorting input...")
     # get taxa to exclude
-    excludes = pd.read_excel(args.species_excludes)
-    excludes_set = set(excludes['Type Genera'])
+    if args.species_excludes:
+        excludes = pd.read_csv(args.species_excludes, header=0)
+        excludes_set = set(excludes['Type Genera'])
+    else:
+        excludes_set = set()
     print("Checking Taxonomy...\n")
     # get dictionaries of starting taxon names + any other taxonomies (for IOC taxa)
     tmp_ioc_taxa, tmp_non_ioc_taxonomy = check_species_list_against_ref_taxonomy(con, sheet)
@@ -259,10 +384,7 @@ if __name__ == '__main__':
     print("Getting taxonomies for IOC taxa")
     cycled_color = cycle(range(2))
     # create master dataframe for tissues
-    #master_lsu_tissues = pd.DataFrame()
     master_other_tissues = pd.DataFrame()
-    master_vertnet_tissues = pd.DataFrame()
-    master_ala_tissues = pd.DataFrame()
     master_missing_tissues = pd.DataFrame()
     for taxon in tmp_ioc_taxa:
         tax = check_alternate_taxonomies(con, taxon)
@@ -275,19 +397,8 @@ if __name__ == '__main__':
     for taxon, taxa_names in all_taxonomies.items():
         print(taxon)
         other_tissue_records = get_tissue_records(con, taxa_names)
-        # get vertnet tissue records
-        vertnet_tissue_records = get_vertnet_tissue_records(con, taxa_names)
-        # get ALA tissue records
-        ala_tissue_records = get_ala_tissue_records(con, taxa_names)
         # extract the starting information from the spreadsheet
         sheet_info = sheet.loc[sheet['Genus species'] == taxon]
-        # if we cant find any taxon in any database, that taxon is missing
-        if args.all_databases:
-            if (len(other_tissue_records) == 0) and (len(vertnet_tissue_records) == 0) and (len(ala_tissue_records) == 0):
-                master_missing_tissues = master_missing_tissues.append(sheet_info,ignore_index=True)
-        else:
-            if len(other_tissue_records) == 0:
-                master_missing_tissues = master_missing_tissues.append(sheet_info,ignore_index=True)
         ########################
         # OTHER COLLAB TISSUES #
         ########################
@@ -299,13 +410,31 @@ if __name__ == '__main__':
             # set status == skipped
             other_sheet_info = copy.deepcopy(sheet_info)
             skipped = True
+            missing = False
         elif len(other_tissue_records) >= 1:
             other_sheet_info = pd.concat([sheet_info] * len(other_tissue_records))
             skipped = False
-        else:
-            other_sheet_info = copy.deepcopy(sheet_info)
-            skipped = False
-        #pdb.set_trace()
+            missing = False
+        elif len(other_tissue_records) == 0:
+            # see what's in vertnet
+            vertnet_tissue_records = get_vertnet_tissue_records(con, taxa_names)
+            ala_tissue_records = get_ala_tissue_records(con, taxa_names)
+            if len(vertnet_tissue_records) >= 1:
+                print("\t Found in Vertnet...")
+                #pdb.set_trace()
+                other_tissue_records = vertnet_tissue_records
+                other_sheet_info = pd.concat([sheet_info] * len(other_tissue_records))
+                # see what's in ALA
+            elif len(ala_tissue_records) >=1:
+                print("\t Found in ALA...")
+                #pdb.set_trace()
+                other_tissue_records = ala_tissue_records
+                other_sheet_info = pd.concat([sheet_info] * len(other_tissue_records))
+            else:
+                other_sheet_info = copy.deepcopy(sheet_info)
+                skipped = False
+                missing = True
+                master_missing_tissues = master_missing_tissues.append(sheet_info,ignore_index=True)
         # reset index on sheet_info
         other_sheet_info = other_sheet_info.reset_index()
         # join these two df
@@ -325,49 +454,15 @@ if __name__ == '__main__':
             other_tissue_df['missing'] = True
         #pdb.set_trace()
         master_other_tissues = master_other_tissues.append(other_tissue_df,ignore_index=True)
-        if args.all_databases:
-            ###################
-            # VERTNET TISSUES #
-            ###################
-            if len(vertnet_tissue_records) > 1:
-                vertnet_sheet_info = pd.concat([sheet_info] * len(vertnet_tissue_records))
-            else:
-                vertnet_sheet_info = copy.deepcopy(sheet_info)
-            # reset index on sheet_info
-            vertnet_sheet_info = vertnet_sheet_info.reset_index()
-            # join these two df
-            vertnet_tissue_df = pd.concat([vertnet_sheet_info, vertnet_tissue_records], axis=1, sort=False)
-            # add a column indicating which color we'll use for records
-            vertnet_tissue_df['Color'] = color
-            if len(vertnet_tissue_records) == 0:
-                vertnet_tissue_df['Missing'] = True
-            else:
-                vertnet_tissue_df['Missing'] = False
-            master_vertnet_tissues = master_vertnet_tissues.append(vertnet_tissue_df,ignore_index=True)
-            ###############
-            # ALA TISSUES #
-            ###############
-            if len(ala_tissue_records) > 1:
-                ala_sheet_info = pd.concat([sheet_info] * len(ala_tissue_records))
-            else:
-                ala_sheet_info = copy.deepcopy(sheet_info)
-            # reset index on sheet_info
-            ala_sheet_info = ala_sheet_info.reset_index()
-            # join these two df
-            ala_tissue_df = pd.concat([ala_sheet_info, ala_tissue_records], axis=1, sort=False)
-            # add a column indicating which color we'll use for records
-            ala_tissue_df['Color'] = color
-            if len(ala_tissue_records) == 0:
-                ala_tissue_df['Missing'] = True
-            else:
-                ala_tissue_df['Missing'] = False
-            master_ala_tissues = master_ala_tissues.append(ala_tissue_df,ignore_index=True)
-
-    #master_lsu_tissues.to_excel('{}-lsu_merged_tissues.xlsx'.format(date.today()))
-    master_other_tissues.to_excel('{}-other_merged_tissues.xlsx'.format(date.today()))
+    # we need to sort the resulting df
+    master_other_tissues.sort_values(['Order','Family','Genus species','rank'], inplace=True)
+    master_other_tissues.reset_index(inplace=True, drop=True)
+    # and we need to mask records in one copy
+    # we'll make a copy of the array
+    masked_master_other_tissues = master_other_tissues.copy(deep=True)
+    masked_master_other_tissues.loc[masked_master_other_tissues['icode'] == 'USNM', ['icode', 'year', 'catalognumber', 'sex', 'ordr', 'family', 'genus', 'species', 'subspecies', 'preparations', 'continent', 'country', 'state', 'county', 'island', 'locality', 'decimallatitude', 'decimallongitude', 'remarks', 'prep']] = 'xxx'
+    master_other_tissues.to_excel('{}-tissues.xlsx'.format(date.today()))
+    masked_master_other_tissues.to_excel('{}-tissues-MASKED.xlsx'.format(date.today()))
     master_missing_tissues.to_excel('{}-missing_tissues.xlsx'.format(date.today()))
-    if args.all_databases:
-        master_vertnet_tissues.to_excel('{}-vertnet_merged_tissues.xlsx'.format(date.today()))
-        master_ala_tissues.to_excel('{}-ala_merged_tissues.xlsx'.format(date.today()))
     con.close()
     print("\nFinished.\n")
