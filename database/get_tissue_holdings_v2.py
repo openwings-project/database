@@ -62,10 +62,16 @@ def get_args():
         help="""A file containing any species to exclude."""
     )
     parser.add_argument(
-        '--all-databases',
-        action='store_true',
-        default=False,
-        help="""Run queries against all possible database."""
+        '--num-taxa',
+        type=int,
+        default=25,
+        help="""The maximum number of taxa from a museum to return."""
+    )
+    parser.add_argument(
+        '--access-path',
+        type=is_file,
+        action=FullPaths,
+        help="""The path to the database access.conf file."""
     )
     return parser.parse_args()
 
@@ -141,7 +147,7 @@ def check_species_list_against_ref_taxonomy(connection, sheet):
             pass
     return ioc_taxa, non_ioc_taxa
 
-def get_tissue_records(connection, taxon):
+def get_tissue_records(connection, taxon, num_taxa):
     if len(taxon) == 1:
         other_tissue_df = pd.read_sql_query("""
             SELECT
@@ -171,9 +177,9 @@ def get_tissue_records(connection, taxon):
             WHERE 
                 (genus='{0}' AND species='{1}')
             ORDER BY 
-                sex, year DESC 
-            LIMIT 25
-            """.format(taxon[0][0], taxon[0][1]), con=connection)
+                rank ASC, sex, year DESC
+            LIMIT {2}
+            """.format(taxon[0][0], taxon[0][1], num_taxa), con=connection)
     elif len(taxon) > 1:
         # format the where statement
         partial_where = ["(genus='{0}' AND species='{1}')".format(name[0], name[1]) for name in taxon]
@@ -206,13 +212,13 @@ def get_tissue_records(connection, taxon):
             WHERE 
                 ({0})
             ORDER BY 
-                sex ASC, year DESC 
-            LIMIT 25
-            """.format(where), con=connection)
+                rank ASC, sex ASC, year DESC
+            LIMIT {1}
+            """.format(where, num_taxa), con=connection)
     return other_tissue_df
 
 
-def get_vertnet_tissue_records(connection, taxon):
+def get_vertnet_tissue_records(connection, taxon, num_taxa):
     if len(taxon) == 1:
         vertnet_tissue_df = pd.read_sql_query("""
             SELECT
@@ -242,9 +248,9 @@ def get_vertnet_tissue_records(connection, taxon):
             WHERE 
                 (genus='{0}' AND species='{1}') 
             ORDER BY 
-                sex, year DESC 
-            LIMIT 25
-            """.format(taxon[0][0], taxon[0][1]), con=connection)
+                rank ASC, sex, year DESC
+            LIMIT {2}
+            """.format(taxon[0][0], taxon[0][1], num_taxa), con=connection)
     elif len(taxon) > 1:
         # format the where statement
         partial_where = ["(genus='{0}' AND species='{1}')".format(name[0], name[1]) for name in taxon]
@@ -277,13 +283,13 @@ def get_vertnet_tissue_records(connection, taxon):
             WHERE 
                 ({0})
             ORDER BY 
-                sex ASC, year DESC
-            LIMIT 25
-            """.format(where), con=connection)
+                rank ASC, sex ASC, year DESC
+            LIMIT {1}
+            """.format(where, num_taxa), con=connection)
     return vertnet_tissue_df
 
 
-def get_ala_tissue_records(connection, taxon):
+def get_ala_tissue_records(connection, taxon, num_taxa):
     if len(taxon) == 1:
         ala_tissue_df = pd.read_sql_query("""
             SELECT
@@ -313,9 +319,9 @@ def get_ala_tissue_records(connection, taxon):
             WHERE 
                 (genus='{0}' AND species='{1}') 
             ORDER BY 
-                sex, year DESC 
-            LIMIT 25
-            """.format(taxon[0][0], taxon[0][1]), con=connection)
+                rank ASC, sex, year DESC
+            LIMIT {2}
+            """.format(taxon[0][0], taxon[0][1], num_taxa), con=connection)
     elif len(taxon) > 1:
         # format the where statement
         partial_where = ["(genus='{0}' AND species='{1}')".format(name[0], name[1]) for name in taxon]
@@ -348,16 +354,16 @@ def get_ala_tissue_records(connection, taxon):
             WHERE 
                 ({0})
             ORDER BY 
-                sex ASC, year DESC
-            LIMIT 25
-            """.format(where), con=connection)
+                rank ASC, sex ASC, year DESC
+            LIMIT {1}
+            """.format(where, num_taxa), con=connection)
     return ala_tissue_df
 
 if __name__ == '__main__':
     print("Starting.\n")
     args = get_args()
     db_conf = configparser.ConfigParser()
-    db_conf.read("access.conf")
+    db_conf.read(args.access_path)
     connection_string = "postgresql://{0}:{1}@localhost:5432/openwings".format(
             db_conf['openwings']['user'],
             db_conf['openwings']['password']
@@ -396,7 +402,7 @@ if __name__ == '__main__':
     all_taxonomies = {**ioc_taxonomy, **non_ioc_taxonomy}
     for taxon, taxa_names in all_taxonomies.items():
         print(taxon)
-        other_tissue_records = get_tissue_records(con, taxa_names)
+        other_tissue_records = get_tissue_records(con, taxa_names, args.num_taxa)
         # extract the starting information from the spreadsheet
         sheet_info = sheet.loc[sheet['Genus species'] == taxon]
         ########################
@@ -417,19 +423,23 @@ if __name__ == '__main__':
             missing = False
         elif len(other_tissue_records) == 0:
             # see what's in vertnet
-            vertnet_tissue_records = get_vertnet_tissue_records(con, taxa_names)
-            ala_tissue_records = get_ala_tissue_records(con, taxa_names)
+            vertnet_tissue_records = get_vertnet_tissue_records(con, taxa_names, args.num_taxa)
+            ala_tissue_records = get_ala_tissue_records(con, taxa_names, args.num_taxa)
             if len(vertnet_tissue_records) >= 1:
                 print("\t Found in Vertnet...")
                 #pdb.set_trace()
                 other_tissue_records = vertnet_tissue_records
                 other_sheet_info = pd.concat([sheet_info] * len(other_tissue_records))
+                skipped = False
+                missing = False
                 # see what's in ALA
             elif len(ala_tissue_records) >=1:
                 print("\t Found in ALA...")
                 #pdb.set_trace()
                 other_tissue_records = ala_tissue_records
                 other_sheet_info = pd.concat([sheet_info] * len(other_tissue_records))
+                skipped = False
+                missing = False
             else:
                 other_sheet_info = copy.deepcopy(sheet_info)
                 skipped = False
